@@ -1,0 +1,1114 @@
+const express = require("express");
+const path = require("path");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ==========================================
+// API-FOOTBALL
+// https://www.api-football.com/
+// ==========================================
+
+const API_KEY = process.env.API_FOOTBALL_KEY;
+
+const API_URL = "https://v3.football.api-sports.io";
+
+if (!API_KEY) {
+    console.warn(
+        "FIGYELEM: nincs megadva API_FOOTBALL_KEY környezeti változó."
+    );
+}
+
+async function apiFootball(endpoint) {
+    const response = await fetch(API_URL + endpoint, {
+        headers: {
+            "x-apisports-key": API_KEY
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            `API hiba: ${response.status} ${response.statusText}`
+        );
+    }
+
+    return response.json();
+}
+
+
+// ==========================================
+// CSAPATOK
+// ==========================================
+
+app.get("/api/teams", async (req, res) => {
+    try {
+        const data = await apiFootball(
+            "/teams?league=140&season=2026"
+        );
+
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({
+            error: error.message
+        });
+    }
+});
+
+
+// ==========================================
+// TELJES 2026/27 MENETREND
+// ==========================================
+
+app.get("/api/fixtures", async (req, res) => {
+    try {
+        let allFixtures = [];
+
+        // Az API oldalanként adhatja vissza a mérkőzéseket.
+        for (let page = 1; page <= 30; page++) {
+
+            const data = await apiFootball(
+                `/fixtures?league=140&season=2026&page=${page}`
+            );
+
+            if (!data.response || data.response.length === 0) {
+                break;
+            }
+
+            allFixtures.push(...data.response);
+
+            if (
+                !data.paging ||
+                page >= data.paging.total
+            ) {
+                break;
+            }
+        }
+
+        res.json({
+            results: allFixtures,
+            count: allFixtures.length
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            error: error.message
+        });
+    }
+});
+
+
+// ==========================================
+// TABELLA
+// ==========================================
+
+app.get("/api/standings", async (req, res) => {
+    try {
+        const data = await apiFootball(
+            "/standings?league=140&season=2026"
+        );
+
+        res.json(data);
+
+    } catch (error) {
+        res.status(500).json({
+            error: error.message
+        });
+    }
+});
+
+
+// ==========================================
+// ÉLŐ MÉRKŐZÉSEK
+// ==========================================
+
+app.get("/api/live", async (req, res) => {
+    try {
+        const data = await apiFootball(
+            "/fixtures?league=140&season=2026&live=all"
+        );
+
+        res.json(data);
+
+    } catch (error) {
+        res.status(500).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.use(express.static(path.join(__dirname, "public")));
+
+
+app.listen(PORT, () => {
+    console.log(
+        `LaLiga Live elindult: http://localhost:${PORT}`
+    );
+});{
+  "name": "laliga-live-2026-27",
+  "version": "1.0.0",
+  "description": "LaLiga 2026/27 élő eredménykövető",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>LaLiga Live 2026/27</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background:
+        radial-gradient(circle at top, #263d66, #07101f 55%);
+    color: white;
+}
+
+header {
+    background: rgba(4, 10, 22, .94);
+    padding: 22px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid rgba(255,255,255,.12);
+}
+
+.header-inner {
+    max-width: 1400px;
+    margin: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.logo-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.laliga-logo {
+    width: 58px;
+    height: 58px;
+    border-radius: 15px;
+    background: linear-gradient(135deg,#ff006e,#8338ec,#3a86ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 15px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.subtitle {
+    color: #9ba9c2;
+    margin-top: 4px;
+}
+
+.live-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #b7ffca;
+    font-size: 14px;
+}
+
+.live-dot {
+    width: 10px;
+    height: 10px;
+    background: #20e070;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #20e070;
+}
+
+.container {
+    max-width: 1400px;
+    margin: auto;
+    padding: 25px;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+select,
+button {
+    border: none;
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: #172640;
+    color: white;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+button:hover,
+select:hover {
+    background: #22375b;
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 1fr 390px;
+    gap: 25px;
+}
+
+.panel {
+    background: rgba(9, 19, 37, .85);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25);
+}
+
+.panel-title {
+    padding: 18px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.match {
+    display: grid;
+    grid-template-columns: 1fr 80px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.match:hover {
+    background: rgba(255,255,255,.035);
+}
+
+.team {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.team.home {
+    justify-content: flex-end;
+    text-align: right;
+}
+
+.team.away {
+    justify-content: flex-start;
+}
+
+.team img {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+}
+
+.score {
+    text-align: center;
+    font-weight: 900;
+    font-size: 20px;
+}
+
+.score.live {
+    color: #ff405d;
+}
+
+.score.final {
+    color: #ffffff;
+}
+
+.score.pending {
+    color: #7e8ba3;
+    font-size: 15px;
+}
+
+.minute {
+    display: block;
+    color: #ff405d;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.date {
+    color: #8997af;
+    font-size: 12px;
+    text-align: center;
+    margin-top: 5px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 10px 7px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.table th {
+    color: #8392ab;
+    font-weight: normal;
+}
+
+.table tr {
+    border-bottom: 1px solid rgba(255,255,255,.05);
+}
+
+.table tr:hover {
+    background: rgba(255,255,255,.04);
+}
+
+.position {
+    width: 28px;
+    font-weight: bold;
+}
+
+.club {
+    text-align: left !important;
+}
+
+.club-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.club-info img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.points {
+    font-weight: 900;
+}
+
+.champions {
+    border-left: 4px solid #1683ff;
+}
+
+.europa {
+    border-left: 4px solid #ffb000;
+}
+
+.relegation {
+    border-left: 4px solid #ff405d;
+}
+
+.loading {
+    padding: 35px;
+    text-align: center;
+    color: #8898b1;
+}
+
+.error {
+    padding: 20px;
+    background: rgba(255,50,70,.12);
+    color: #ff8795;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.footer {
+    text-align: center;
+    color: #687892;
+    padding: 30px;
+    font-size: 13px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 7px;
+    border-radius: 5px;
+    font-size: 10px;
+    margin-left: 5px;
+}
+
+.badge-live {
+    background: #5c1020;
+    color: #ff6a7d;
+}
+
+.badge-final {
+    background: #193a27;
+    color: #71e59a;
+}
+
+.badge-next {
+    background: #253653;
+    color: #91a5c7;
+}
+
+@media(max-width: 1000px) {
+
+    .layout {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+@media(max-width: 650px) {
+
+    .header-inner {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .container {
+        padding: 12px;
+    }
+
+    .match {
+        grid-template-columns: 1fr 65px 1fr;
+        padding: 12px 8px;
+    }
+
+    .team img {
+        width: 30px;
+        height: 30px;
+    }
+
+    .team {
+        font-size: 12px;
+    }
+
+    h1 {
+        font-size: 22px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+
+<div class="header-inner">
+
+    <div class="logo-title">
+
+        <div class="laliga-logo">
+            LALIGA
+        </div>
+
+        <div>
+            <h1>LaLiga Live</h1>
+            <div class="subtitle">
+                EA SPORTS • 2026/27
+            </div>
+        </div>
+
+    </div>
+
+    <div class="live-status">
+        <span class="live-dot"></span>
+        Élő adatok
+    </div>
+
+</div>
+
+</header>
+
+
+<main class="container">
+
+<div id="error"></div>
+
+<div class="controls">
+
+    <select id="roundSelect">
+        <option value="all">
+            Összes mérkőzés
+        </option>
+    </select>
+
+    <button onclick="showToday()">
+        📅 Mai mérkőzések
+    </button>
+
+    <button onclick="loadEverything()">
+        🔄 Frissítés
+    </button>
+
+</div>
+
+
+<div class="layout">
+
+    <section class="panel">
+
+        <div class="panel-title">
+            ⚽ Mérkőzések
+        </div>
+
+        <div id="matches">
+            <div class="loading">
+                Mérkőzések betöltése...
+            </div>
+        </div>
+
+    </section>
+
+
+    <aside class="panel">
+
+        <div class="panel-title">
+            📊 Tabella
+        </div>
+
+        <div id="standings">
+            <div class="loading">
+                Tabella betöltése...
+            </div>
+        </div>
+
+    </aside>
+
+</div>
+
+</main>
+
+
+<div class="footer">
+
+    LaLiga 2026/27 eredménykövető
+    <br><br>
+
+    Az adatok automatikusan frissülnek.
+    <br>
+    Hivatalos menetrend: LALIGA / RFEF
+
+</div>
+
+
+<script>
+
+let fixtures = [];
+let standings = [];
+
+
+// ==========================================
+// SEGÉDFÜGGVÉNYEK
+// ==========================================
+
+function escapeHTML(text) {
+
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+}
+
+
+function formatDate(dateString) {
+
+    const d = new Date(dateString);
+
+    return d.toLocaleString("hu-HU", {
+        weekday: "short",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+
+}
+
+
+// ==========================================
+// ADATOK BETÖLTÉSE
+// ==========================================
+
+async function loadEverything() {
+
+    document.getElementById("error").innerHTML = "";
+
+    try {
+
+        const [
+            fixturesResponse,
+            standingsResponse
+        ] = await Promise.all([
+            fetch("/api/fixtures"),
+            fetch("/api/standings")
+        ]);
+
+        if (!fixturesResponse.ok ||
+            !standingsResponse.ok) {
+
+            throw new Error(
+                "Nem sikerült lekérni az adatokat."
+            );
+        }
+
+        const fixturesData =
+            await fixturesResponse.json();
+
+        const standingsData =
+            await standingsResponse.json();
+
+        fixtures = fixturesData.results || [];
+
+        if (
+            standingsData.response &&
+            standingsData.response.length
+        ) {
+
+            standings =
+                standingsData.response[0]
+                    .league
+                    .standings[0];
+
+        }
+
+        populateRounds();
+
+        renderFixtures(fixtures);
+
+        renderStandings();
+
+    } catch (error) {
+
+        document.getElementById("error").innerHTML =
+            `<div class="error">
+                ⚠️ ${escapeHTML(error.message)}
+            </div>`;
+
+    }
+
+}
+
+
+// ==========================================
+// FORDULÓK
+// ==========================================
+
+function populateRounds() {
+
+    const select =
+        document.getElementById("roundSelect");
+
+    const current =
+        select.value;
+
+    select.innerHTML =
+        `<option value="all">
+            Összes mérkőzés
+        </option>`;
+
+    const rounds = [
+        ...new Set(
+            fixtures
+                .map(f => f.league?.round)
+                .filter(Boolean)
+        )
+    ];
+
+    rounds.sort((a,b) => {
+
+        const na =
+            parseInt(a.match(/\d+/)?.[0] || 0);
+
+        const nb =
+            parseInt(b.match(/\d+/)?.[0] || 0);
+
+        return na - nb;
+
+    });
+
+    rounds.forEach(round => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = round;
+        option.textContent = round;
+
+        select.appendChild(option);
+
+    });
+
+    select.value = current || "all";
+
+    select.onchange = () => {
+
+        if (select.value === "all") {
+
+            renderFixtures(fixtures);
+
+        } else {
+
+            renderFixtures(
+                fixtures.filter(
+                    f =>
+                    f.league?.round === select.value
+                )
+            );
+
+        }
+
+    };
+
+}
+
+
+// ==========================================
+// MÉRKŐZÉSEK
+// ==========================================
+
+function renderFixtures(list) {
+
+    const container =
+        document.getElementById("matches");
+
+    if (!list.length) {
+
+        container.innerHTML =
+            `<div class="loading">
+                Nincs mérkőzés.
+            </div>`;
+
+        return;
+    }
+
+    // Időrend
+    list.sort(
+        (a,b) =>
+        new Date(a.fixture.date) -
+        new Date(b.fixture.date)
+    );
+
+    container.innerHTML =
+        list.map(match => {
+
+            const status =
+                match.fixture.status;
+
+            const home =
+                match.teams.home;
+
+            const away =
+                match.teams.away;
+
+            let score = "–";
+
+            let scoreClass = "pending";
+
+            let badge =
+                `<span class="badge badge-next">
+                    KÖVETKEZŐ
+                </span>`;
+
+            if (
+                status.short === "FT" ||
+                status.short === "AET" ||
+                status.short === "PEN"
+            ) {
+
+                score =
+                    `${match.goals.home}
+                     : 
+                     ${match.goals.away}`;
+
+                scoreClass = "final";
+
+                badge =
+                    `<span class="badge badge-final">
+                        VÉGE
+                    </span>`;
+
+            } else if (
+                [
+                    "1H",
+                    "2H",
+                    "HT",
+                    "ET",
+                    "P"
+                ].includes(status.short)
+            ) {
+
+                score =
+                    `${match.goals.home ?? 0}
+                     :
+                     ${match.goals.away ?? 0}`;
+
+                scoreClass = "live";
+
+                badge =
+                    `<span class="badge badge-live">
+                        ÉLŐ
+                    </span>`;
+
+            }
+
+            const minute =
+                status.elapsed
+                    ? `<span class="minute">
+                        ${status.elapsed}'
+                       </span>`
+                    : "";
+
+            return `
+
+            <div class="match">
+
+                <div class="team home">
+
+                    <span>
+                        ${escapeHTML(home.name)}
+                    </span>
+
+                    <img
+                        src="${home.logo}"
+                        alt="${escapeHTML(home.name)}"
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <div class="score ${scoreClass}">
+                        ${score}
+                    </div>
+
+                    ${minute}
+
+                    <div class="date">
+                        ${formatDate(match.fixture.date)}
+                    </div>
+
+                    ${badge}
+
+                </div>
+
+
+                <div class="team away">
+
+                    <img
+                        src="${away.logo}"
+                        alt="${escapeHTML(away.name)}"
+                    >
+
+                    <span>
+                        ${escapeHTML(away.name)}
+                    </span>
+
+                </div>
+
+            </div>
+
+            `;
+
+        })
+        .join("");
+
+}
+
+
+// ==========================================
+// TABELLA
+// ==========================================
+
+function renderStandings() {
+
+    const container =
+        document.getElementById("standings");
+
+    if (!standings.length) {
+
+        container.innerHTML =
+            `<div class="loading">
+                Nincs elérhető tabella.
+            </div>`;
+
+        return;
+    }
+
+    container.innerHTML = `
+
+    <table class="table">
+
+        <thead>
+
+            <tr>
+                <th>#</th>
+                <th class="club">Csapat</th>
+                <th>P</th>
+                <th>M</th>
+                <th>GY</th>
+                <th>D</th>
+                <th>V</th>
+                <th>GK</th>
+                <th>+</th>
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+            ${standings.map(row => {
+
+                let className = "";
+
+                if (row.rank <= 4) {
+
+                    className = "champions";
+
+                } else if (row.rank <= 6) {
+
+                    className = "europa";
+
+                } else if (row.rank >= 18) {
+
+                    className = "relegation";
+
+                }
+
+                return `
+
+                <tr class="${className}">
+
+                    <td class="position">
+                        ${row.rank}
+                    </td>
+
+                    <td class="club">
+
+                        <div class="club-info">
+
+                            <img
+                                src="${row.team.logo}"
+                                alt="${escapeHTML(row.team.name)}"
+                            >
+
+                            <span>
+                                ${escapeHTML(row.team.name)}
+                            </span>
+
+                        </div>
+
+                    </td>
+
+                    <td class="points">
+                        ${row.points}
+                    </td>
+
+                    <td>
+                        ${row.all.played}
+                    </td>
+
+                    <td>
+                        ${row.all.win}
+                    </td>
+
+                    <td>
+                        ${row.all.draw}
+                    </td>
+
+                    <td>
+                        ${row.all.lose}
+                    </td>
+
+                    <td>
+                        ${row.all.goals.for}
+                    </td>
+
+                    <td>
+                        ${row.goalsDiff > 0 ? "+" : ""}
+                        ${row.goalsDiff}
+                    </td>
+
+                </tr>
+
+                `;
+
+            }).join("")}
+
+        </tbody>
+
+    </table>
+
+    `;
+
+}
+
+
+// ==========================================
+// MAI MÉRKŐZÉSEK
+// ==========================================
+
+function showToday() {
+
+    const today =
+        new Date().toISOString().slice(0,10);
+
+    const todayMatches =
+        fixtures.filter(f => {
+
+            return f.fixture.date
+                .startsWith(today);
+
+        });
+
+    renderFixtures(todayMatches);
+
+}
+
+
+// ==========================================
+// AUTOMATIKUS FRISSÍTÉS
+// ==========================================
+
+// Kezdeti betöltés
+loadEverything();
+
+
+// 30 másodpercenként frissít
+setInterval(() => {
+
+    loadEverything();
+
+}, 30000);
+
+</script>
+
+</body>
+</html>
+laliga-live/
+│
+├── server.js
+├── package.json
+│
+└── public/
+    └── index.html
+	npm install
